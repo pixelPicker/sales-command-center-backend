@@ -14,12 +14,17 @@ const app = express();
 
 // Middleware
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+    origin: "http://localhost:5173",
+    credentials: true
+}));
 app.use('/uploads', express.static('uploads'));
 
 // Routes
+console.log('Mounting routes...');
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/contact', require('./routes/contact.routes'));
+console.log('Routes mounted');
 app.use('/api/meeting', require('./routes/meeting.routes'));
 app.use('/api/action', require('./routes/action.routes'));
 
