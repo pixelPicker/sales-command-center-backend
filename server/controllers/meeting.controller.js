@@ -166,6 +166,7 @@ const analyzeMeeting = async (req, res, next) => {
     if (aiResponse.participants && aiResponse.participants.length > 0) {
       meeting.participants = aiResponse.participants;
     }
+    await meeting.save();
 
     // 4. Create AI-suggested actions
     const createdAIActions = [];
