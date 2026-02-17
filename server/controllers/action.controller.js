@@ -48,6 +48,14 @@ const confirmAction = async (req, res, next) => {
             });
 
             console.log("New Meeting Auto-Created:", newMeeting._id);
+        } else if (action.type === 'stage_update') {
+            const Deal = require('../models/Deal');
+            const deal = await Deal.findById(action.dealId);
+            if (deal) {
+                deal.stage = action.suggestedData.proposedStage;
+                await deal.save();
+                console.log(`Deal ${deal._id} updated to stage: ${deal.stage}`);
+            }
         }
 
         res.status(200).json({

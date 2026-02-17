@@ -8,10 +8,34 @@ const Contact = require('../models/Contact');
 // @access  Private
 const getContacts = async (req, res, next) => {
     try {
-        const contacts = await Contact.find({ owner: req.user.id }).sort({ createdAt: -1 });
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const search = req.query.search || '';
+        const skip = (page - 1) * limit;
+
+        const query = { owner: req.user.id };
+
+        if (search) {
+            query.$or = [
+                { name: { $regex: search, $options: 'i' } },
+                { company: { $regex: search, $options: 'i' } },
+                { email: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const contacts = await Contact.find(query)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        const total = await Contact.countDocuments(query);
+
         res.status(200).json({
             success: true,
             count: contacts.length,
+            total,
+            totalPages: Math.ceil(total / limit),
+            currentPage: page,
             data: contacts
         });
     } catch (err) {

@@ -16,10 +16,15 @@ const askDeal = async (req, res, next) => {
         .json({ success: false, message: "Deal not found" });
     }
 
-    const meetings = await require("../models/Meeting")
-      .find({ dealId: req.params.id, userId: req.user.id })
-      .sort({ createdAt: -1 })
+    const pastMeetings = await require("../models/Meeting")
+      .find({
+        dealId: req.params.id,
+        userId: req.user.id,
+        dateTime: { $lt: new Date() } // Past meetings only
+      })
+      .sort({ dateTime: -1 }) // Most recent past meetings
       .limit(3);
+
     const actions = await require("../models/Action")
       .find({ dealId: req.params.id, userId: req.user.id })
       .sort({ createdAt: -1 });
@@ -29,8 +34,8 @@ Deal: ${deal.title}, Stage: ${deal.stage}, Value: $${deal.value}, Status: ${deal
 
 Client: ${deal.clientId.name} at ${deal.clientId.company}, Email: ${deal.clientId.email}, Phone: ${deal.clientId.phone || "N/A"}
 
-Recent Meetings (${meetings.length}):
-${meetings.map((m) => `- ${m.title} (${new Date(m.dateTime).toLocaleDateString()}): ${m.aiSummary || (m.transcript ? m.transcript.slice(0, 150) + "..." : "No summary")}`).join("\n")}
+Recent Past Meetings (Context for Summary):
+${pastMeetings.length > 0 ? pastMeetings.map((m) => `- ${m.title} (${new Date(m.dateTime).toLocaleDateString()}): ${m.aiSummary || (m.transcript ? "Transcript available but no summary generated." : "No transcript/summary")}`).join("\n") : "No past meetings found."}
 
 Actions (${actions.length}):
 ${actions.map((a) => `- ${a.title}: ${a.description} (${a.status}, ${a.priority})`).join("\n")}
@@ -56,17 +61,37 @@ ${actions.map((a) => `- ${a.title}: ${a.description} (${a.status}, ${a.priority}
 
 // @desc    Get all deals
 // @route   GET /api/deal
-// @access  Private
+// @access  Public
 const getDeals = async (req, res, next) => {
   try {
-    const deals = await Deal.find({ userId: req.user.id })
-      .populate("clientId", "name company")
-      .sort({ createdAt: -1 });
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || '';
+    const skip = (page - 1) * limit;
+
+    const query = { userId: req.user.id };
+
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const deals = await Deal.find(query)
+      .populate('clientId', 'name company')
+      .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Deal.countDocuments(query);
 
     res.status(200).json({
       success: true,
       count: deals.length,
-      data: deals,
+      total,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
+      data: deals
     });
   } catch (err) {
     next(err);

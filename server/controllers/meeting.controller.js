@@ -47,6 +47,12 @@ const parseSchedulingIntent = (intent) => {
 const createMeeting = async (req, res, next) => {
   try {
     const meetingData = { ...req.body, userId: req.user.id };
+
+    // Sanitize empty strings for ObjectIds
+    if (meetingData.dealId === "") {
+      delete meetingData.dealId;
+    }
+
     const meeting = await Meeting.create(meetingData);
     res.status(201).json({
       success: true,
@@ -94,13 +100,31 @@ const getMeetingsByClientId = async (req, res, next) => {
 // @access  Public
 const getCalendar = async (req, res, next) => {
   try {
-    const meetings = await Meeting.find({ userId: req.user.id })
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || '';
+    const skip = (page - 1) * limit;
+
+    const query = { userId: req.user.id };
+
+    if (search) {
+      query.title = { $regex: search, $options: 'i' };
+    }
+
+    const meetings = await Meeting.find(query)
       .populate('clientId', 'name company')
-      .sort({ dateTime: 1 });
+      .sort({ dateTime: 1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Meeting.countDocuments(query);
 
     res.status(200).json({
       success: true,
       count: meetings.length,
+      total,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
       data: meetings
     });
   } catch (err) {
@@ -173,8 +197,19 @@ const analyzeMeeting = async (req, res, next) => {
 
     // Scheduling action
     if (aiResponse.schedulingIntent) {
-      const dateTime = parseSchedulingIntent(aiResponse.schedulingIntent);
-      if (dateTime) {
+      // Check if it's the new object format
+      let dateTime = null;
+      let title = "Follow-up Meeting";
+
+      if (typeof aiResponse.schedulingIntent === 'object' && aiResponse.schedulingIntent.dateTime) {
+        dateTime = new Date(aiResponse.schedulingIntent.dateTime);
+        if (aiResponse.schedulingIntent.title) title = aiResponse.schedulingIntent.title;
+      } else if (typeof aiResponse.schedulingIntent === 'string') {
+        // Legacy string parsing
+        dateTime = parseSchedulingIntent(aiResponse.schedulingIntent);
+      }
+
+      if (dateTime && !isNaN(dateTime.getTime())) {
         const action = await Action.create({
           meetingId: meeting._id,
           clientId: meeting.clientId,
@@ -182,7 +217,7 @@ const analyzeMeeting = async (req, res, next) => {
           userId: req.user.id,
           type: "schedule",
           suggestedData: {
-            title: "Follow-up Meeting",
+            title,
             dateTime,
             contactId: meeting.clientId,
             dealId: meeting.dealId,
@@ -195,19 +230,34 @@ const analyzeMeeting = async (req, res, next) => {
     }
 
     // Deal stage update action
-    if (aiResponse.dealSignal === "Positive" && meeting.dealId) {
+    if (meeting.dealId) {
       const Deal = require("../models/Deal");
       const deal = await Deal.findById(meeting.dealId);
+
       if (deal) {
-        const stageProgression = {
-          Lead: "Discovery",
-          Discovery: "Qualified",
-          Qualified: "Proposal Sent",
-          "Proposal Sent": "Negotiation",
-          Negotiation: "Closed Won",
-        };
-        const nextStage = stageProgression[deal.stage];
-        if (nextStage) {
+        let proposedStage = null;
+
+        // 1. Explicit AI Suggestion (High Confidence)
+        if (aiResponse.dealStageSuggestion && aiResponse.dealStageSuggestion !== deal.stage) {
+          const validStages = ["Lead", "Discovery", "Qualified", "Proposal Sent", "Negotiation", "Closed Won", "Closed Lost"];
+          if (validStages.includes(aiResponse.dealStageSuggestion)) {
+            proposedStage = aiResponse.dealStageSuggestion;
+          }
+        }
+
+        // 2. Fallback: Positive Signal Heuristic (if no explicit suggestion)
+        if (!proposedStage && aiResponse.dealSignal === "Positive") {
+          const stageProgression = {
+            Lead: "Discovery",
+            Discovery: "Qualified",
+            Qualified: "Proposal Sent",
+            "Proposal Sent": "Negotiation",
+            Negotiation: "Closed Won",
+          };
+          proposedStage = stageProgression[deal.stage];
+        }
+
+        if (proposedStage && proposedStage !== deal.stage) {
           const action = await Action.create({
             meetingId: meeting._id,
             clientId: meeting.clientId,
@@ -216,7 +266,8 @@ const analyzeMeeting = async (req, res, next) => {
             type: "stage_update",
             suggestedData: {
               currentStage: deal.stage,
-              proposedStage: nextStage,
+              proposedStage: proposedStage,
+              reason: aiResponse.summary || "Positive deal signals detected."
             },
             source: "ai",
             status: "pending",

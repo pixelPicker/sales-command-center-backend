@@ -11,32 +11,47 @@ const analyzeTranscript = async (transcript) => {
     }
 
     const prompt = `
-        Analyze the following meeting transcript and extracting insights into a STRICT JSON format.
+        You are an expert Sales Operations Analyst and Psychologist. Your task is to analyze the following B2B sales meeting transcript and extract high-value insights.
         
         Transcript: 
         "${transcript}"
 
-        Return ONLY the following JSON structure (valid JSON, no markdown formatting):
+        INSTRUCTIONS:
+        1. **summary**: Write a 3-4 sentence detailed executive summary. Focus on business value, key decisions, and critical blockers.
+        2. **participants**: Extract names of all people mentioned. If none, return an empty array.
+        3. **keyTopics**: List 3-5 main topics/themes discussed (e.g., "Pricing", "Integration", "Security").
+        4. **nextStep**: Identify the single most important next action item. If none is explicitly stated, suggest a logical next step (e.g., "Send follow-up email").
+        5. **objection**: Identify the primary objection or concern raised by the client. If none, return null.
+        6. **intent**: Assess the buyer's purchasing intent (High, Medium, Low) based on their engagement, questions, and tone.
+        7. **timeline**: Extract any mentioned dates or timeframes for deployment, next steps, or contract signing. If vague, estimate based on context (e.g., "Q3", "Next week").
+        8. **riskSignals**: List specific risks that could slow or kill the deal (e.g., "Budget cuts", "Competitor mention", "dm missing").
+        9. **schedulingIntent**: If a specific follow-up time is proposed, return an object { "title": "Follow-up", "dateTime": "YYYY-MM-DDTHH:mm:ss" }. If vague or none, return null.
+        10. **dealSignal**: Overall sentiment of the deal (Positive, Neutral, Negative).
+        11. **dealStageSuggestion**: If the conversation indicates a clear stage progression (e.g., "Send me the contract" -> Negotiation), suggest the NEW stage (Lead, Discovery, Qualified, Proposal Sent, Negotiation, Closed Won, Closed Lost). Otherwise null.
+
+        OUTPUT FORMAT:
+        Return ONLY valid JSON. No markdown. No explanations outside the JSON.
         {
-            "summary": "Brief summary of the meeting",
-            "participants": ["List of participant names mentioned in the transcript"],
-            "keyTopics": ["List of main topics discussed"],
-            "nextStep": "What is the next step or action item",
-            "objection": "Any objections raised, or null",
-            "intent": "Buyer's intent level: High, Medium, Low",
-            "timeline": "Proposed timeline for next actions",
-            "riskSignals": ["List of any risk signals or concerns"],
-            "schedulingIntent": "If a follow-up meeting is mentioned, extract details (e.g. 'Monday at 2pm') otherwise null",
-            "dealSignal": "Positive, Neutral, or Negative"
+            "summary": "String",
+            "participants": ["String"],
+            "keyTopics": ["String"],
+            "nextStep": "String",
+            "objection": "String or null",
+            "intent": "High",
+            "timeline": "String or null",
+            "riskSignals": ["String"],
+            "schedulingIntent": { "title": "String", "dateTime": "ISO8601 String" } or null,
+            "dealSignal": "Positive",
+            "dealStageSuggestion": "String or null"
         }
-        `;
+    `;
 
     const payload = {
       model: "llama-3.1-8b-instant",
       messages: [
         {
           role: "system",
-          content: "You are an expert Sales Operations Analyst. Your job is to analyze transcripts from B2B sales meetings. Output strict JSON. Provide executive-level summaries, deep psychological analysis of buyer intent, and highly specific actionable next steps. Do not include markdown formatting.",
+          content: "You are an expert Sales Operations Analyst. Your job is to analyze transcripts from B2B sales meetings. Output strictly valid JSON without any markdown formatting. Be concise but specific.",
         },
         { role: "user", content: prompt },
       ],
@@ -107,13 +122,20 @@ ${context}
 
 Question: ${question}
 
-Provide a helpful, concise answer based on the context.
+Instructions:
+- Provide a helpful, concise answer based *strictly* on the context.
+- **FORMATTING IS CRITICALLY IMPORTANT**:
+  - Use **bold** for key terms.
+  - Use bullet points for lists.
+  - Use numbered lists for steps.
+  - Split long paragraphs into smaller, readable chunks.
+  - Do NOT output a single block of text.
         `;
 
     const payload = {
       model: "llama-3.1-8b-instant",
       messages: [
-        { role: "system", content: "You are a helpful sales assistant." },
+        { role: "system", content: "You are a helpful sales assistant. You MUST format your response using Markdown. Use bullet points, bold text, and newlines to make the response easy to read." },
         { role: "user", content: prompt },
       ],
       temperature: 0.5,
