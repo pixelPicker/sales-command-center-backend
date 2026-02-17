@@ -8,7 +8,8 @@ const { parseAction } = require('../services/intentParser');
 // @access  Public
 const createMeeting = async (req, res, next) => {
     try {
-        const meeting = await Meeting.create(req.body);
+        const meetingData = { ...req.body, userId: req.user.id };
+        const meeting = await Meeting.create(meetingData);
         res.status(201).json({
             success: true,
             data: meeting
@@ -30,7 +31,7 @@ const getMeetingsByClientId = async (req, res, next) => {
         .json({ success: false, message: "Please provide clientId" });
     }
 
-    const meetings = await Meeting.find({ clientId })
+    const meetings = await Meeting.find({ clientId, userId: req.user.id })
       .populate("clientId", "name company")
       .sort({ date: -1 });
 
@@ -42,6 +43,25 @@ const getMeetingsByClientId = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+};
+
+// @desc    Get all meetings (calendar view)
+// @route   GET /api/meeting/calendar
+// @access  Public
+const getCalendar = async (req, res, next) => {
+    try {
+        const meetings = await Meeting.find({ userId: req.user.id })
+            .populate('clientId', 'name company')
+            .sort({ dateTime: 1 });
+
+        res.status(200).json({
+            success: true,
+            count: meetings.length,
+            data: meetings
+        });
+    } catch (err) {
+        next(err);
+    }
 };
 
 // @desc    Analyze meeting transcript
@@ -76,10 +96,11 @@ const analyzeMeeting = async (req, res, next) => {
 
         for (const actionData of parsedActions) {
             const action = await Action.create({
-                meetingId: meeting._id,
-                type: actionData.type,
-                suggestedData: actionData.suggestedData,
-                status: 'pending'
+              meetingId: meeting._id,
+              userId: req.user.id,
+              type: actionData.type,
+              suggestedData: actionData.suggestedData,
+              status: "pending",
             });
             createdActions.push(action);
         }
