@@ -59,6 +59,31 @@ const confirmAction = async (req, res, next) => {
     }
 };
 
+// @desc    Get actions by clientId
+// @route   GET /api/action?clientId=...
+// @access  Public
+const getActionsByClientId = async (req, res, next) => {
+    try {
+        const { clientId } = req.query;
+        if (!clientId) {
+            return res.status(400).json({ success: false, message: 'Please provide clientId' });
+        }
+
+        const actions = await Action.find({ clientId })
+            .populate('meetingId', 'title')
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            count: actions.length,
+            data: actions
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 module.exports = {
-    confirmAction
+  confirmAction,
+  getActionsByClientId,
 };

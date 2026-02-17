@@ -70,8 +70,40 @@ const deleteContact = async (req, res, next) => {
     }
 };
 
+// @desc    Get single contact
+// @route   GET /api/contact/:id
+// @access  Private
+const getContact = async (req, res, next) => {
+    try {
+        const contact = await Contact.findById(req.params.id);
+
+        if (!contact) {
+            return res.status(404).json({
+                success: false,
+                error: 'Contact not found'
+            });
+        }
+
+        // Make sure user is contact owner
+        if (contact.owner.toString() !== req.user.id) {
+            return res.status(401).json({
+                success: false,
+                error: 'Not authorized to access this contact'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: contact
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 module.exports = {
     getContacts,
     createContact,
-    deleteContact
+    deleteContact,
+    getContact
 };

@@ -1,7 +1,15 @@
 const express = require('express');
 const router = express.Router();
 
-const { createMeeting, getCalendar, analyzeMeeting, transcribeMeetingAudio, autoProcessMeeting, processLiveAudio } = require('../controllers/meeting.controller');
+const {
+  createMeeting,
+  getCalendar,
+  analyzeMeeting,
+  transcribeMeetingAudio,
+  autoProcessMeeting,
+  processLiveAudio,
+  getMeetingsByClientId,
+} = require("../controllers/meeting.controller");
 const multer = require('multer');
 const { protect } = require('../middleware/auth.middleware');
 
@@ -10,7 +18,10 @@ const upload = multer({ dest: 'uploads/' });
 const storageMemory = multer.memoryStorage();
 const uploadMemory = multer({ storage: storageMemory });
 
-router.route('/').post(protect, createMeeting);
+router
+  .route("/")
+  .get(protect, getMeetingsByClientId)
+  .post(protect, createMeeting);
 router.get('/calendar', protect, getCalendar);
 router.post('/analyze', protect, analyzeMeeting);
 router.post('/transcribe', protect, upload.single('audio'), transcribeMeetingAudio);

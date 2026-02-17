@@ -18,23 +18,30 @@ const createMeeting = async (req, res, next) => {
     }
 };
 
-// @desc    Get all meetings (calendar view)
-// @route   GET /api/meeting/calendar
+// @desc    Get meetings by clientId
+// @route   GET /api/meeting?clientId=...
 // @access  Public
-const getCalendar = async (req, res, next) => {
-    try {
-        const meetings = await Meeting.find()
-            .populate('contactId', 'name company')
-            .sort({ dateTime: 1 });
-
-        res.status(200).json({
-            success: true,
-            count: meetings.length,
-            data: meetings
-        });
-    } catch (err) {
-        next(err);
+const getMeetingsByClientId = async (req, res, next) => {
+  try {
+    const { clientId } = req.query;
+    if (!clientId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Please provide clientId" });
     }
+
+    const meetings = await Meeting.find({ clientId })
+      .populate("clientId", "name company")
+      .sort({ date: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: meetings.length,
+      data: meetings,
+    });
+  } catch (err) {
+    next(err);
+  }
 };
 
 // @desc    Analyze meeting transcript
@@ -55,10 +62,10 @@ const analyzeMeeting = async (req, res, next) => {
 
         // 1. Save transcript
         meeting.transcript = transcript;
-        
+
         // 2. Call AI Service
         const aiResponse = await analyzeTranscript(transcript);
-        
+
         // 3. Update Meeting with Summary
         meeting.aiSummary = aiResponse.summary || 'No summary generated';
         await meeting.save();
@@ -134,40 +141,45 @@ const transcribeMeetingAudio = async (req, res, next) => {
 // @access  Public
 const autoProcessMeeting = async (req, res, next) => {
     try {
-        const { meetingId } = req.body;
+      const { meetingId } = req.body;
 
-        if (!meetingId) {
-             return res.status(400).json({ success: false, message: 'Please provide meetingId' });
-        }
+      if (!meetingId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Please provide meetingId" });
+      }
 
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: 'Please upload an audio file' });
-        }
+      if (!req.file) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Please upload an audio file" });
+      }
 
-        const filePath = req.file.path;
-        const { autoProcessMeetingAudio } = require('../services/autoWorkflow.service');
-        const fs = require('fs');
+      const filePath = req.file.path;
+      const {
+        autoProcessMeetingAudio,
+      } = require("../services/autoWorkflow.service");
+      const fs = require("fs");
 
-        // Execute Workflow
-        const results = await autoProcessMeetingAudio(meetingId, filePath);
+      // Execute Workflow
+      const results = await autoProcessMeetingAudio(meetingId, filePath);
 
-        // Cleanup
-        fs.unlinkSync(filePath);
+      // Cleanup
+      fs.unlinkSync(filePath);
 
-        res.status(200).json({
-            success: true,
-            data: results
-        });
-
+      res.status(200).json({
+        success: true,
+        data: results,
+      });
     } catch (err) {
-         // Attempt cleanup if error occurred and file exists
-         if (req.file && req.file.path) {
-            const fs = require('fs');
-            if (fs.existsSync(req.file.path)) {
-                fs.unlinkSync(req.file.path);
-            }
+      // Attempt cleanup if error occurred and file exists
+      if (req.file && req.file.path) {
+        const fs = require("fs");
+        if (fs.existsSync(req.file.path)) {
+          fs.unlinkSync(req.file.path);
         }
-        next(err);
+      }
+      next(err);
     }
 };
 
@@ -177,22 +189,24 @@ const autoProcessMeeting = async (req, res, next) => {
 const processLiveAudio = async (req, res, next) => {
     try {
         const { meetingId } = req.body;
-        
+
         if (!meetingId) {
-             return res.status(400).json({ success: false, message: 'Please provide meetingId' });
+            return res
+              .status(400)
+              .json({ success: false, message: "Please provide meetingId" });
         }
 
         // Check for file (multipart) AND buffer logic if using memory storage
         // If multer memoryStorage is used, req.file.buffer is available
         // If streams are sent as raw body, we might need req.body (but multer handles multipart better for frontend)
-        
+
         if (!req.file || !req.file.buffer) {
             return res.status(400).json({ success: false, message: 'No audio data received' });
         }
 
         const { createTempFile, deleteTempFile } = require('../utils/tempFile');
         const { autoProcessMeetingAudio } = require('../services/autoWorkflow.service');
-        
+
         // Create temp file from buffer
         // Default to webm as that's common for MediaRecorder
         const tempFilePath = createTempFile(req.file.buffer, 'webm');
