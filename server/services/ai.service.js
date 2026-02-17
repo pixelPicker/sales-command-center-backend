@@ -3,10 +3,11 @@ const axios = require('axios');
 const analyzeTranscript = async (transcript) => {
   try {
     const apiKey = process.env.AI_API_KEY;
-    const apiUrl = process.env.AI_API_URL;
+    // Use Groq's chat completion endpoint. If AI_API_URL is set in env, use that, otherwise default to Groq.
+    const apiUrl = process.env.AI_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
 
-    if (!apiKey || !apiUrl) {
-      throw new Error("AI service not configured: Missing API KEY or URL");
+    if (!apiKey) {
+      throw new Error("AI service not configured: Missing AI_API_KEY");
     }
 
     const prompt = `
@@ -30,19 +31,17 @@ const analyzeTranscript = async (transcript) => {
         }
         `;
 
-    // Generic payload structure fitting many providers (like OpenAI/Anthropic/Local LLMs that follow common patterns)
-    // Adjust payload structure if specific provider requirements are known, but keep it generic enough.
-    // Assuming an OpenAI-compatible interface for now as it's the most common "generic" target.
     const payload = {
-      model: "gpt-3.5-turbo", // Or user configured model
+      model: "llama-3.1-8b-instant",
       messages: [
         {
           role: "system",
-          content: "You are a helpful sales assistant. Output strict JSON.",
+          content: "You are a helpful sales assistant. Output strict JSON. Do not include any explanation or markdown formatting.",
         },
         { role: "user", content: prompt },
       ],
-      temperature: 0.3,
+      temperature: 0.1, // Lower temperature for more deterministic JSON
+      response_format: { type: "json_object" } // Enforce JSON object if supported by provider (Groq does support this)
     };
 
     const response = await axios.post(apiUrl, payload, {
@@ -52,25 +51,21 @@ const analyzeTranscript = async (transcript) => {
       },
     });
 
-    // Defensive parsing to handle various API response structures
-    let content;
+    // Handle Groq/OpenAI response structure
+    let content = "";
     if (
       response.data.choices &&
       response.data.choices[0] &&
       response.data.choices[0].message
     ) {
       content = response.data.choices[0].message.content;
-    } else if (response.data.response) {
-      // Some other APIs
-      content = response.data.response;
     } else {
-      // Fallback for simple raw text responses
-      content = JSON.stringify(response.data);
+      throw new Error("Unexpected API response structure");
     }
 
     console.log("AI Raw Response:", content);
 
-    // Clean up markdown code blocks if present
+    // Clean up markdown code blocks if present (just in case)
     const jsonString = content
       .replace(/```json/g, "")
       .replace(/```/g, "")
@@ -98,10 +93,10 @@ const analyzeTranscript = async (transcript) => {
 const askDealQuestion = async (context, question) => {
   try {
     const apiKey = process.env.AI_API_KEY;
-    const apiUrl = process.env.AI_API_URL;
+    const apiUrl = process.env.AI_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
 
-    if (!apiKey || !apiUrl) {
-      throw new Error("AI service not configured: Missing API KEY or URL");
+    if (!apiKey) {
+      throw new Error("AI service not configured: Missing AI_API_KEY");
     }
 
     const prompt = `
@@ -121,7 +116,7 @@ Provide a helpful, concise answer based on the context.
         { role: "system", content: "You are a helpful sales assistant." },
         { role: "user", content: prompt },
       ],
-      temperature: 0.3,
+      temperature: 0.5,
     };
 
     const response = await axios.post(apiUrl, payload, {
@@ -131,17 +126,15 @@ Provide a helpful, concise answer based on the context.
       },
     });
 
-    let content;
+    let content = "";
     if (
       response.data.choices &&
       response.data.choices[0] &&
       response.data.choices[0].message
     ) {
       content = response.data.choices[0].message.content;
-    } else if (response.data.response) {
-      content = response.data.response;
     } else {
-      content = JSON.stringify(response.data);
+      throw new Error("Unexpected API response structure");
     }
 
     return content.trim();
