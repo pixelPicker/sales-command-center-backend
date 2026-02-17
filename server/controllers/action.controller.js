@@ -9,8 +9,8 @@ const confirmAction = async (req, res, next) => {
         const { actionId } = req.body;
 
         const action = await Action.findOne({
-          _id: actionId,
-          userId: req.user.id,
+            _id: actionId,
+            userId: req.user.id,
         }).populate("meetingId");
         if (!action) {
             return res.status(404).json({ success: false, message: 'Action not found' });
@@ -31,22 +31,22 @@ const confirmAction = async (req, res, next) => {
             // Create new meeting
             // We need the contact ID from the original meeting
             const originalMeeting = action.meetingId; // Populated above
-            
+
             if (!originalMeeting) {
-                 return res.status(400).json({ success: false, message: 'Original meeting not found, cannot schedule follow-up' });
+                return res.status(400).json({ success: false, message: 'Original meeting not found, cannot schedule follow-up' });
             }
 
             const { title, dateTime } = action.suggestedData;
 
             newMeeting = await Meeting.create({
-              title: title || "Follow-up Meeting",
-              contactId: originalMeeting.contactId,
-              userId: req.user.id,
-              dateTime: dateTime || new Date(Date.now() + 86400000), // Default to tomorrow if missing
-              transcript: "",
-              aiSummary: "",
+                title: title || "Follow-up Meeting",
+                clientId: originalMeeting.clientId,
+                userId: req.user.id,
+                dateTime: dateTime || new Date(Date.now() + 86400000), // Default to tomorrow if missing
+                transcript: "",
+                aiSummary: "",
             });
-            
+
             console.log("New Meeting Auto-Created:", newMeeting._id);
         }
 
@@ -68,14 +68,23 @@ const confirmAction = async (req, res, next) => {
 // @access  Public
 const getActionsByClientId = async (req, res, next) => {
     try {
-        const { clientId } = req.query;
-        if (!clientId) {
-            return res.status(400).json({ success: false, message: 'Please provide clientId' });
+        const { clientId, dealId } = req.query;
+        let filter = { userId: req.user.id };
+
+        if (dealId) {
+            filter.dealId = dealId;
+        } else if (clientId) {
+            filter.clientId = clientId;
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: "Please provide clientId or dealId",
+            });
         }
 
-        const actions = await Action.find({ clientId, userId: req.user.id })
-          .populate("meetingId", "title")
-          .sort({ createdAt: -1 });
+        const actions = await Action.find(filter)
+            .populate("meetingId", "title")
+            .sort({ createdAt: -1 });
 
         res.status(200).json({
             success: true,
@@ -87,7 +96,28 @@ const getActionsByClientId = async (req, res, next) => {
     }
 };
 
+// @desc    Delete action
+// @route   DELETE /api/action/:id
+// @access  Private
+const deleteAction = async (req, res, next) => {
+    try {
+        const action = await Action.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
+
+        if (!action) {
+            return res.status(404).json({ success: false, message: 'Action not found' });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: {}
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 module.exports = {
-  confirmAction,
-  getActionsByClientId,
+    confirmAction,
+    getActionsByClientId,
+    deleteAction,
 };

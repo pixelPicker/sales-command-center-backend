@@ -27,6 +27,7 @@ app.use('/api/contact', require('./routes/contact.routes'));
 console.log('Routes mounted');
 app.use('/api/meeting', require('./routes/meeting.routes'));
 app.use('/api/action', require('./routes/action.routes'));
+app.use("/api/deal", require("./routes/deal.routes"));
 
 // Base route
 app.get('/', (req, res) => {
