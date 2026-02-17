@@ -36,7 +36,7 @@ const analyzeTranscript = async (transcript) => {
       messages: [
         {
           role: "system",
-          content: "You are a helpful sales assistant. Output strict JSON. Do not include any explanation or markdown formatting.",
+          content: "You are an expert Sales Operations Analyst. Your job is to analyze transcripts from B2B sales meetings. Output strict JSON. Provide executive-level summaries, deep psychological analysis of buyer intent, and highly specific actionable next steps. Do not include markdown formatting.",
         },
         { role: "user", content: prompt },
       ],

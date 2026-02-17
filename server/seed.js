@@ -75,7 +75,24 @@ const seedData = async () => {
             });
         }
         // Past meetings (some with transcripts)
-        const transcriptSample = "Sales Rep: Hi, thanks for joining. I wanted to walk you through our new CRM features.\nClient: Sounds good. We are looking for better reporting and AI integrations.\nSales Rep: Perfect. Our AI Intelligence layer does exactly that. It records meetings and extracts insights.\nClient: That's interesting. What about pricing?\nSales Rep: It starts at $50/user. We can offer a discount if you sign by end of month.\nClient: Okay, send me a proposal. We need to discuss internally.\nSales Rep: Will do. Let's touch base next Tuesday at 2pm.";
+        const transcriptSample = `
+Sales Rep (Sarah): Hi everyone, thanks for making time today. I'm joined by my solutions engineer, Mike. We wanted to dive deeper into the technical requirements you mentioned last week.
+Client (Mark - CTO): Thanks Sarah. Yes, we have Julie from Ops here too. Our main concern right now is scalability. We're doubling our user base every quarter.
+Client (Julie - VP Ops): Exactly. The current solution crashes when we hit peak load on Mondays. We need 99.99% uptime guaranteed.
+Sales Rep (Sarah): Understood. Our Enterprise plan is built on Kubernetes and auto-scales instantly. We actually guarantee 99.999% uptime in the SLA.
+Client (Mark): That sounds good on paper. But what about data residency? We have customers in the EU.
+Sales Rep (Mike): We support multi-region deployment. You can pin data to Frankfurt or Dublin availability zones to comply with GDPR.
+Client (Julie): Okay, that addresses compliance. What about the implementation timeline? We need to be live by Q3.
+Sales Rep (Sarah): classic implementation takes 6-8 weeks. If we sign by the end of this month, we can start onboarding on the 15th and hit your Q3 target.
+Client (Mark): The pricing you sent earlier... $50k is a bit steep for the first year.
+Sales Rep (Sarah): I hear you. If you can commit to a 2-year contract, I can drop the annual rate to $42k and waive the implementation fee.
+Client (Julie): That helps. Mark, do we have budget for a 2-year commit?
+Client (Mark): I think so, but I need to clear it with the CFO. He's worried about vendor lock-in.
+Sales Rep (Sarah): We offer full data export at any time, standard format. No lock-in. I'll send over the updated proposal with the 2-year discount.
+Client (Mark): Okay, send it over. Lets aim to review it next Tuesday.
+Client (Julie): Also, can you send the security whitepaper? InfoSec will ask for it.
+Sales Rep (Sarah): Absolutely. I'll attach that. Thanks everyone!
+        `;
 
         for (let i = 1; i <= 10; i++) {
             const contact = createdContacts[(i + 10) % createdContacts.length];
