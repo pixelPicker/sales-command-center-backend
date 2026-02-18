@@ -10,53 +10,151 @@ const analyzeTranscript = async (transcript) => {
       throw new Error("AI service not configured: Missing AI_API_KEY");
     }
 
+    // const prompt = `
+    //     As a Senior Sales Operations Analyst, analyze the following B2B sales meeting transcript. 
+    //     Focus on identifying high-leverage business opportunities, critical blockers, and technical requirements.
+
+    //     Transcript: 
+    //     "${transcript}"
+
+    //     INSTRUCTIONS:
+    //     1. **summary**: Write a concise, executive-level summary (4-5 sentences). Focus on the core value proposition and the client's current pain points.
+    //     2. **participants**: Extract names of all people mentioned. If none, return an empty array.
+    //     3. **keyTopics**: List 3-5 high-level business topics (e.g., "Operational Scalability", "Cost Optimization", "Risk Mitigation").
+    //     4. **nextStep**: Identify the critical path forward. What is the single most important next action?
+    //     5. **objection**: Identify the primary concern or risk signal. If none, return null.
+    //     6. **intent**: Assess the buyer's stage and intent (High, Medium, Low).
+    //     7. **timeline**: Extract specific deployment dates or contract cycles. 
+    //     8. **riskSignals**: List specific factors that could derail the deal.
+    //     9. **schedulingIntent**: If a specific follow-up time is proposed, return an object { "title": "Follow-up", "dateTime": "YYYY-MM-DDTHH:mm:ss" }.
+    //     10. **dealSignal**: Overall professional sentiment (Positive, Neutral, Negative).
+    //     11. **dealStageSuggestion**: Suggest the next logical stage in the CRM based on the conversation flow.
+
+    //     OUTPUT FORMAT:
+    //     Return ONLY valid JSON. 
+    //     {
+    //         "summary": "String",
+    //         "participants": ["String"],
+    //         "keyTopics": ["String"],
+    //         "nextStep": "String",
+    //         "objection": "String or null",
+    //         "intent": "High",
+    //         "timeline": "String or null",
+    //         "riskSignals": ["String"],
+    //         "schedulingIntent": { "title": "String", "dateTime": "ISO8601 String" } or null,
+    //         "dealSignal": "Positive",
+    //         "dealStageSuggestion": "String or null"
+    //     }
+    // `;
+
     const prompt = `
-        You are an expert Sales Operations Analyst and Psychologist. Your task is to analyze the following B2B sales meeting transcript and extract high-value insights.
-        
-        Transcript: 
-        "${transcript}"
+You are an enterprise Sales Intelligence Extraction Engine.
 
-        INSTRUCTIONS:
-        1. **summary**: Write a 3-4 sentence detailed executive summary. Focus on business value, key decisions, and critical blockers.
-        2. **participants**: Extract names of all people mentioned. If none, return an empty array.
-        3. **keyTopics**: List 3-5 main topics/themes discussed (e.g., "Pricing", "Integration", "Security").
-        4. **nextStep**: Identify the single most important next action item. If none is explicitly stated, suggest a logical next step (e.g., "Send follow-up email").
-        5. **objection**: Identify the primary objection or concern raised by the client. If none, return null.
-        6. **intent**: Assess the buyer's purchasing intent (High, Medium, Low) based on their engagement, questions, and tone.
-        7. **timeline**: Extract any mentioned dates or timeframes for deployment, next steps, or contract signing. If vague, estimate based on context (e.g., "Q3", "Next week").
-        8. **riskSignals**: List specific risks that could slow or kill the deal (e.g., "Budget cuts", "Competitor mention", "dm missing").
-        9. **schedulingIntent**: If a specific follow-up time is proposed, return an object { "title": "Follow-up", "dateTime": "YYYY-MM-DDTHH:mm:ss" }. If vague or none, return null.
-        10. **dealSignal**: Overall sentiment of the deal (Positive, Neutral, Negative).
-        11. **dealStageSuggestion**: If the conversation indicates a clear stage progression (e.g., "Send me the contract" -> Negotiation), suggest the NEW stage (Lead, Discovery, Qualified, Proposal Sent, Negotiation, Closed Won, Closed Lost). Otherwise null.
+Your task is to extract strictly verifiable, structured signals from a B2B sales meeting transcript.
 
-        OUTPUT FORMAT:
-        Return ONLY valid JSON. No markdown. No explanations outside the JSON.
-        {
-            "summary": "String",
-            "participants": ["String"],
-            "keyTopics": ["String"],
-            "nextStep": "String",
-            "objection": "String or null",
-            "intent": "High",
-            "timeline": "String or null",
-            "riskSignals": ["String"],
-            "schedulingIntent": { "title": "String", "dateTime": "ISO8601 String" } or null,
-            "dealSignal": "Positive",
-            "dealStageSuggestion": "String or null"
-        }
-    `;
+NON-NEGOTIABLE RULES:
+
+1. Extract ONLY information explicitly supported by the transcript.
+2. If something is not clearly stated, return null.
+3. Do NOT infer budget unless a number is stated.
+4. Do NOT assign stakeholder roles unless directly implied.
+5. If confidence < 0.6, return null.
+6. Separate evidence from interpretation.
+7. Return strictly valid JSON. No markdown. No commentary.
+
+TRANSCRIPT:
+---
+${transcript}
+---
+
+RETURN JSON USING THIS EXACT SCHEMA:
+
+{
+  "summary": {
+    "text": "4 sentence executive summary",
+    "confidence": 0.0
+  },
+
+  "stakeholders": [
+    {
+      "name": "String",
+      "role": "Decision Maker | Budget Owner | Influencer | Unknown",
+      "evidence": "Short quote from transcript",
+      "confidence": 0.0
+    }
+  ],
+
+  "budget": {
+    "amount": 0,
+    "currency": "USD | EUR | null",
+    "evidence": "Quote supporting extraction or null",
+    "confidence": 0.0
+  },
+
+  "timeline": {
+    "text": "Exact timeline mentioned or null",
+    "evidence": "Quote or null",
+    "confidence": 0.0
+  },
+
+  "objections": [
+    {
+      "type": "Implementation | Pricing | Adoption | Competition | Other",
+      "detail": "Specific objection",
+      "evidence": "Quote",
+      "severity": 0.0
+    }
+  ],
+
+  "riskSignals": [
+    {
+      "signal": "Description",
+      "evidence": "Quote",
+      "impactScore": 0.0
+    }
+  ],
+
+  "competitorsMentioned": [
+    {
+      "name": "String",
+      "evidence": "Quote"
+    }
+  ],
+
+  "intentScore": 0.0,
+
+  "actions": [
+    {
+      "type": "schedule | email | stage_update | followup",
+      "title": "Short description",
+      "dateTime": "ISO8601 or null",
+      "evidence": "Quote supporting action",
+      "confidence": 0.0
+    }
+  ],
+
+  "dealSignal": "Positive | Neutral | Negative",
+
+  "dealStageSuggestion": {
+    "stage": "String or null",
+    "reasoning": "One sentence grounded in transcript",
+    "confidence": 0.0
+  }
+}
+`;
+
 
     const payload = {
       model: "llama-3.1-8b-instant",
       messages: [
         {
           role: "system",
-          content: "You are an expert Sales Operations Analyst. Your job is to analyze transcripts from B2B sales meetings. Output strictly valid JSON without any markdown formatting. Be concise but specific.",
+          content: "You are a Senior Sales Operations Analyst. You provide precise, professional, and data-driven insights. Output strictly valid JSON.",
         },
         { role: "user", content: prompt },
       ],
-      temperature: 0.1, // Lower temperature for more deterministic JSON
-      response_format: { type: "json_object" } // Enforce JSON object if supported by provider (Groq does support this)
+      temperature: 0,
+      response_format: { type: "json_object" }
     };
 
     const response = await axios.post(apiUrl, payload, {
@@ -66,7 +164,6 @@ const analyzeTranscript = async (transcript) => {
       },
     });
 
-    // Handle Groq/OpenAI response structure
     let content = "";
     if (
       response.data.choices &&
@@ -78,9 +175,6 @@ const analyzeTranscript = async (transcript) => {
       throw new Error("Unexpected API response structure");
     }
 
-    console.log("AI Raw Response:", content);
-
-    // Clean up markdown code blocks if present (just in case)
     const jsonString = content
       .replace(/```json/g, "")
       .replace(/```/g, "")
@@ -89,7 +183,6 @@ const analyzeTranscript = async (transcript) => {
     return JSON.parse(jsonString);
   } catch (error) {
     console.error("AI Service Error:", error.response?.data || error.message);
-    // Fallback return validation
     return {
       summary: "Error analyzing transcript",
       participants: [],
@@ -105,7 +198,7 @@ const analyzeTranscript = async (transcript) => {
   }
 };
 
-const askDealQuestion = async (context, question) => {
+const askDealQuestion = async (context, question, userName = "Salesperson") => {
   try {
     const apiKey = process.env.AI_API_KEY;
     const apiUrl = process.env.AI_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
@@ -115,30 +208,33 @@ const askDealQuestion = async (context, question) => {
     }
 
     const prompt = `
-You are an AI sales assistant. Use the following context about a sales deal to answer the question.
+You are a Senior Strategic Sales Advisor. Your goal is to help ${userName} manage this deal with maximum efficiency and professionalism.
 
-Context:
+CONTEXT DATA:
+---
 ${context}
+---
 
-Question: ${question}
+USER QUESTION:
+"${question}"
 
-Instructions:
-- Provide a helpful, concise answer based *strictly* on the context.
-- **FORMATTING IS CRITICALLY IMPORTANT**:
-  - Use **bold** for key terms.
-  - Use bullet points for lists.
-  - Use numbered lists for steps.
-  - Split long paragraphs into smaller, readable chunks.
-  - Do NOT output a single block of text.
+STRICT GUIDELINES:
+1. **NO HALLUCINATIONS**: Your answer must be based strictly on the provided context. If the information (e.g., budget, specific names, or location details) is not in the context, state "Based on the available records, I don't see specific information regarding [X]." 
+2. **PERSONALIZATION**: Address the salesperson professionally (e.g., "Hello, ${userName}. Based on our records...") when appropriate.
+3. **TONE**: Be analytical, confident, and professional. Avoid sounding like a basic chatbot. Think high-level Sales Ops.
+4. **FORMATTING**: Use clean Markdown. Use bold for numbers and key terms. Use bulleted lists for clarity.
         `;
 
     const payload = {
       model: "llama-3.1-8b-instant",
       messages: [
-        { role: "system", content: "You are a helpful sales assistant. You MUST format your response using Markdown. Use bullet points, bold text, and newlines to make the response easy to read." },
+        {
+          role: "system",
+          content: `You are a Senior Strategic Sales Advisor assisting ${userName}. You are expert, professional, and strictly grounded in data. Never invent details about deals or meetings.`
+        },
         { role: "user", content: prompt },
       ],
-      temperature: 0.5,
+      temperature: 0, // Lower temp for more grounding
     };
 
     const response = await axios.post(apiUrl, payload, {
@@ -165,7 +261,7 @@ Instructions:
       "AI Deal Question Error:",
       error.response?.data || error.message,
     );
-    return "Sorry, I encountered an error while processing your question.";
+    return "I apologize, but I encountered an error while retrieving that information for you. Please try again in a moment.";
   }
 };
 

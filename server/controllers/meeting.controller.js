@@ -103,6 +103,7 @@ const getCalendar = async (req, res, next) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const search = req.query.search || '';
+    const timeframe = req.query.timeframe || 'all'; // 'upcoming', 'past', or 'all'
     const skip = (page - 1) * limit;
 
     const query = { userId: req.user.id };
@@ -111,9 +112,21 @@ const getCalendar = async (req, res, next) => {
       query.title = { $regex: search, $options: 'i' };
     }
 
+    if (timeframe === 'upcoming') {
+      query.dateTime = { $gte: new Date() };
+    } else if (timeframe === 'past') {
+      query.dateTime = { $lt: new Date() };
+    }
+
+    // Sort: 
+    // - Upcoming: nearest first (asc)
+    // - Past: most recent first (desc)
+    // - All: nearest first (asc) - but maybe better to separate
+    const sort = timeframe === 'past' ? { dateTime: -1 } : { dateTime: 1 };
+
     const meetings = await Meeting.find(query)
       .populate('clientId', 'name company')
-      .sort({ dateTime: 1 })
+      .sort(sort)
       .skip(skip)
       .limit(limit);
 
@@ -185,97 +198,18 @@ const analyzeMeeting = async (req, res, next) => {
     const aiResponse = await analyzeTranscript(transcript);
 
     // 3. Update Meeting with Summary and Insights
-    meeting.aiSummary = aiResponse.summary || "No summary generated";
+    // Handle new schema: aiResponse.summary is now { text: string, confidence: number }
+    meeting.aiSummary = aiResponse.summary?.text || aiResponse.summary || "No summary generated";
     meeting.aiInsights = aiResponse;
-    if (aiResponse.participants && aiResponse.participants.length > 0) {
+
+    // Handle stakeholders -> participants
+    if (aiResponse.stakeholders && aiResponse.stakeholders.length > 0) {
+      meeting.participants = aiResponse.stakeholders.map(s => s.name);
+    } else if (aiResponse.participants && aiResponse.participants.length > 0) {
       meeting.participants = aiResponse.participants;
     }
+
     await meeting.save();
-
-    // 4. Create AI-suggested actions
-    const createdAIActions = [];
-
-    // Scheduling action
-    if (aiResponse.schedulingIntent) {
-      // Check if it's the new object format
-      let dateTime = null;
-      let title = "Follow-up Meeting";
-
-      if (typeof aiResponse.schedulingIntent === 'object' && aiResponse.schedulingIntent.dateTime) {
-        dateTime = new Date(aiResponse.schedulingIntent.dateTime);
-        if (aiResponse.schedulingIntent.title) title = aiResponse.schedulingIntent.title;
-      } else if (typeof aiResponse.schedulingIntent === 'string') {
-        // Legacy string parsing
-        dateTime = parseSchedulingIntent(aiResponse.schedulingIntent);
-      }
-
-      if (dateTime && !isNaN(dateTime.getTime())) {
-        const action = await Action.create({
-          meetingId: meeting._id,
-          clientId: meeting.clientId,
-          dealId: meeting.dealId,
-          userId: req.user.id,
-          type: "schedule",
-          suggestedData: {
-            title,
-            dateTime,
-            contactId: meeting.clientId,
-            dealId: meeting.dealId,
-          },
-          source: "ai",
-          status: "pending",
-        });
-        createdAIActions.push(action);
-      }
-    }
-
-    // Deal stage update action
-    if (meeting.dealId) {
-      const Deal = require("../models/Deal");
-      const deal = await Deal.findById(meeting.dealId);
-
-      if (deal) {
-        let proposedStage = null;
-
-        // 1. Explicit AI Suggestion (High Confidence)
-        if (aiResponse.dealStageSuggestion && aiResponse.dealStageSuggestion !== deal.stage) {
-          const validStages = ["Lead", "Discovery", "Qualified", "Proposal Sent", "Negotiation", "Closed Won", "Closed Lost"];
-          if (validStages.includes(aiResponse.dealStageSuggestion)) {
-            proposedStage = aiResponse.dealStageSuggestion;
-          }
-        }
-
-        // 2. Fallback: Positive Signal Heuristic (if no explicit suggestion)
-        if (!proposedStage && aiResponse.dealSignal === "Positive") {
-          const stageProgression = {
-            Lead: "Discovery",
-            Discovery: "Qualified",
-            Qualified: "Proposal Sent",
-            "Proposal Sent": "Negotiation",
-            Negotiation: "Closed Won",
-          };
-          proposedStage = stageProgression[deal.stage];
-        }
-
-        if (proposedStage && proposedStage !== deal.stage) {
-          const action = await Action.create({
-            meetingId: meeting._id,
-            clientId: meeting.clientId,
-            dealId: meeting.dealId,
-            userId: req.user.id,
-            type: "stage_update",
-            suggestedData: {
-              currentStage: deal.stage,
-              proposedStage: proposedStage,
-              reason: aiResponse.summary || "Positive deal signals detected."
-            },
-            source: "ai",
-            status: "pending",
-          });
-          createdAIActions.push(action);
-        }
-      }
-    }
 
     // 5. Parse Actions and Create Action Documents (existing logic)
     const parsedActions = parseAction(aiResponse);
@@ -284,9 +218,12 @@ const analyzeMeeting = async (req, res, next) => {
     for (const actionData of parsedActions) {
       const action = await Action.create({
         meetingId: meeting._id,
+        clientId: meeting.clientId,
+        dealId: meeting.dealId,
         userId: req.user.id,
         type: actionData.type,
         suggestedData: actionData.suggestedData,
+        source: "ai",
         status: "pending",
       });
       createdActions.push(action);
@@ -442,10 +379,39 @@ const processLiveAudio = async (req, res, next) => {
   }
 };
 
+// @desc    Update meeting
+// @route   PUT /api/meeting/:id
+// @access  Private
+const updateMeeting = async (req, res, next) => {
+  try {
+    let meeting = await Meeting.findOne({ _id: req.params.id, userId: req.user.id });
+
+    if (!meeting) {
+      return res.status(404).json({
+        success: false,
+        message: 'Meeting not found'
+      });
+    }
+
+    meeting = await Meeting.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true
+    });
+
+    res.status(200).json({
+      success: true,
+      data: meeting
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   createMeeting,
   getCalendar,
   getMeeting,
+  updateMeeting,
   analyzeMeeting,
   transcribeMeetingAudio,
   autoProcessMeeting,

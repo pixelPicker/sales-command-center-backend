@@ -5,6 +5,7 @@ const {
   createMeeting,
   getCalendar,
   getMeeting,
+  updateMeeting,
   analyzeMeeting,
   transcribeMeetingAudio,
   autoProcessMeeting,
@@ -28,6 +29,9 @@ router.post('/analyze', protect, analyzeMeeting);
 router.post('/transcribe', protect, upload.single('audio'), transcribeMeetingAudio);
 router.post('/auto-process', protect, upload.single('audio'), autoProcessMeeting);
 router.post('/live-audio', protect, uploadMemory.single('audio'), processLiveAudio);
-router.route("/:id").get(protect, getMeeting);
+router
+  .route("/:id")
+  .get(protect, getMeeting)
+  .put(protect, updateMeeting);
 
 module.exports = router;

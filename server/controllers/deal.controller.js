@@ -30,15 +30,24 @@ const askDeal = async (req, res, next) => {
       .sort({ createdAt: -1 });
 
     const context = `
-Deal: ${deal.title}, Stage: ${deal.stage}, Value: $${deal.value}, Status: ${deal.status}, Last Activity: ${deal.lastActivity ? new Date(deal.lastActivity).toLocaleDateString() : "None"}
+[DEAL OVERVIEW]
+- Title: ${deal.title}
+- Stage: ${deal.stage}
+- Forecast Value: $${deal.value.toLocaleString()}
+- Status: ${deal.status}
+- Last Activity Date: ${deal.lastActivity ? new Date(deal.lastActivity).toLocaleDateString() : "No recent activity logged"}
 
-Client: ${deal.clientId.name} at ${deal.clientId.company}, Email: ${deal.clientId.email}, Phone: ${deal.clientId.phone || "N/A"}
+[CLIENT INFORMATION]
+- Contact: ${deal.clientId.name}
+- Organization: ${deal.clientId.company}
+- Contact Details: ${deal.clientId.email} | ${deal.clientId.phone || "N/A"}
+- Client Historical Sentiment: ${deal.clientId.sentiment || "Neutral"}
 
-Recent Past Meetings (Context for Summary):
-${pastMeetings.length > 0 ? pastMeetings.map((m) => `- ${m.title} (${new Date(m.dateTime).toLocaleDateString()}): ${m.aiSummary || (m.transcript ? "Transcript available but no summary generated." : "No transcript/summary")}`).join("\n") : "No past meetings found."}
+[RECENT INTERACTION HISTORY]
+${pastMeetings.length > 0 ? pastMeetings.map((m) => `- Meeting: "${m.title}" (${new Date(m.dateTime).toLocaleDateString()})\n  Executive Summary: ${m.aiSummary || "Summary pending analysis."}`).join("\n") : "No recorded meeting history for this deal."}
 
-Actions (${actions.length}):
-${actions.map((a) => `- ${a.title}: ${a.description} (${a.status}, ${a.priority})`).join("\n")}
+[OUTSTANDING ACTION ITEMS]
+${actions.length > 0 ? actions.map((a) => `- [${a.status.toUpperCase()}] ${a.title}: ${a.description} (Priority: ${a.priority})`).join("\n") : "No pending actions found."}
         `;
 
     const { question } = req.body;
@@ -48,7 +57,7 @@ ${actions.map((a) => `- ${a.title}: ${a.description} (${a.status}, ${a.priority}
         .json({ success: false, message: "Question is required" });
     }
 
-    const answer = await askDealQuestion(context, question);
+    const answer = await askDealQuestion(context, question, req.user.name);
 
     res.json({ answer });
   } catch (err) {
