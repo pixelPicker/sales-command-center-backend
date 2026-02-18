@@ -91,6 +91,10 @@ const getDeals = async (req, res, next) => {
       query.stage = stage;
     }
 
+    if (req.query.clientId) {
+      query.clientId = req.query.clientId;
+    }
+
     const deals = await Deal.find(query)
       .populate('clientId', 'name company')
       .sort({ updatedAt: -1 })
