@@ -1,3 +1,46 @@
+// Helper function to parse scheduling intent from text (e.g., "Thursday at 4pm")
+const parseSchedulingIntent = (intent) => {
+    if (!intent) return null;
+
+    // Small fix: if it's already an ISO string, just return it
+    if (intent.includes('T') && !isNaN(Date.parse(intent))) {
+        return new Date(intent);
+    }
+
+    // Simple parsing for "Thursday at 4pm" format
+    const dayMatch = intent.match(/(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
+    const timeMatch = intent.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+
+    if (!dayMatch || !timeMatch) return null;
+
+    const dayName = dayMatch[1].toLowerCase();
+    const hour = parseInt(timeMatch[1]);
+    const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+    const ampm = timeMatch[3] ? timeMatch[3].toLowerCase() : null;
+
+    const dayMap = {
+        sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6
+    };
+
+    const targetDay = dayMap[dayName];
+    if (targetDay === undefined) return null;
+
+    let hour24 = hour;
+    if (ampm === 'pm' && hour !== 12) hour24 += 12;
+    if (ampm === 'am' && hour === 12) hour24 = 0;
+
+    const now = new Date();
+    const currentDay = now.getDay();
+    let daysUntil = targetDay - currentDay;
+    if (daysUntil <= 0) daysUntil += 7; // Next week if today or past
+
+    const targetDate = new Date(now);
+    targetDate.setDate(now.getDate() + daysUntil);
+    targetDate.setHours(hour24, minute, 0, 0);
+
+    return targetDate;
+};
+
 const parseAction = (aiResponse) => {
     const actions = [];
 
@@ -5,11 +48,12 @@ const parseAction = (aiResponse) => {
     if (aiResponse.actions && Array.isArray(aiResponse.actions)) {
         for (const act of aiResponse.actions) {
             if (act.type === 'schedule') {
+                const parsedDate = parseSchedulingIntent(act.dateTime || act.title);
                 actions.push({
                     type: 'schedule',
                     suggestedData: {
                         title: act.title || "Follow-up Meeting",
-                        dateTime: act.dateTime || "2024-01-01T10:00:00.000Z",
+                        dateTime: parsedDate ? parsedDate.toISOString() : (act.dateTime || new Date(Date.now() + 86400000).toISOString()),
                         notes: act.evidence || ""
                     },
                     status: 'pending'
@@ -47,6 +91,7 @@ const parseAction = (aiResponse) => {
             }
         }
     }
+
     // If we found actions in the new schema, we skip the legacy mapping 
     // to avoid duplicates, unless we want to merge them.
     if (actions.length > 0) return actions;
@@ -57,11 +102,12 @@ const parseAction = (aiResponse) => {
         // In a real app, use chrono-node or similar.
         // For Hackathon MVP: defaults to "Tomorrow 10 AM" if parsing fails or just pass the text string
 
+        const parsedDate = parseSchedulingIntent(typeof aiResponse.schedulingIntent === 'object' ? aiResponse.schedulingIntent.dateTime : aiResponse.schedulingIntent);
         actions.push({
             type: 'schedule',
             suggestedData: {
                 title: typeof aiResponse.schedulingIntent === 'object' ? aiResponse.schedulingIntent.title : "Follow-up Meeting",
-                dateTime: typeof aiResponse.schedulingIntent === 'object' ? aiResponse.schedulingIntent.dateTime : "2024-01-01T10:00:00.000Z",
+                dateTime: parsedDate ? parsedDate.toISOString() : (typeof aiResponse.schedulingIntent === 'object' ? aiResponse.schedulingIntent.dateTime : new Date(Date.now() + 86400000).toISOString()),
                 notes: typeof aiResponse.schedulingIntent === 'object' ? JSON.stringify(aiResponse.schedulingIntent) : aiResponse.schedulingIntent
             },
             status: 'pending'
@@ -109,4 +155,4 @@ const parseAction = (aiResponse) => {
     return actions;
 };
 
-module.exports = { parseAction };
+module.exports = { parseAction, parseSchedulingIntent };

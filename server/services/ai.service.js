@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const analyzeTranscript = async (transcript) => {
+const analyzeTranscript = async (transcript, currentDate = new Date().toISOString()) => {
   try {
     const apiKey = process.env.AI_API_KEY;
     // Use Groq's chat completion endpoint. If AI_API_URL is set in env, use that, otherwise default to Groq.
@@ -55,7 +55,8 @@ Your task is to extract strictly verifiable, structured signals from a B2B sales
 NON-NEGOTIABLE RULES:
 
 1. Extract ONLY information explicitly supported by the transcript.
-2. If something is not clearly stated, return null.
+2. Use the CURRENT DATE/TIME context to resolve relative dates (e.g., "tomorrow", "next Thursday"): ${currentDate}
+3. If something is not clearly stated, return null.
 3. Do NOT infer budget unless a number is stated.
 4. Do NOT assign stakeholder roles unless directly implied.
 5. If confidence < 0.6, return null.

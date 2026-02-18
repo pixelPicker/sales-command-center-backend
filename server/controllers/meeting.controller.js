@@ -1,45 +1,8 @@
 const Meeting = require('../models/Meeting');
 const Action = require('../models/Action');
 const { analyzeTranscript } = require('../services/ai.service');
-const { parseAction } = require('../services/intentParser');
+const { parseAction, parseSchedulingIntent } = require('../services/intentParser');
 
-// Helper function to parse scheduling intent
-const parseSchedulingIntent = (intent) => {
-  if (!intent) return null;
-
-  // Simple parsing for "Thursday at 4pm" format
-  const dayMatch = intent.match(/(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
-  const timeMatch = intent.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
-
-  if (!dayMatch || !timeMatch) return null;
-
-  const dayName = dayMatch[1].toLowerCase();
-  const hour = parseInt(timeMatch[1]);
-  const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-  const ampm = timeMatch[3] ? timeMatch[3].toLowerCase() : null;
-
-  const dayMap = {
-    sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6
-  };
-
-  const targetDay = dayMap[dayName];
-  if (targetDay === undefined) return null;
-
-  let hour24 = hour;
-  if (ampm === 'pm' && hour !== 12) hour24 += 12;
-  if (ampm === 'am' && hour === 12) hour24 = 0;
-
-  const now = new Date();
-  const currentDay = now.getDay();
-  let daysUntil = targetDay - currentDay;
-  if (daysUntil <= 0) daysUntil += 7; // Next week if today or past
-
-  const targetDate = new Date(now);
-  targetDate.setDate(now.getDate() + daysUntil);
-  targetDate.setHours(hour24, minute, 0, 0);
-
-  return targetDate;
-};
 
 // @desc    Create a meeting (manual)
 // @route   POST /api/meeting
@@ -195,7 +158,7 @@ const analyzeMeeting = async (req, res, next) => {
     meeting.transcript = transcript;
 
     // 2. Call AI Service
-    const aiResponse = await analyzeTranscript(transcript);
+    const aiResponse = await analyzeTranscript(transcript, new Date().toISOString());
 
     // 3. Update Meeting with Summary and Insights
     // Handle new schema: aiResponse.summary is now { text: string, confidence: number }
@@ -211,7 +174,7 @@ const analyzeMeeting = async (req, res, next) => {
 
     await meeting.save();
 
-    // 5. Parse Actions and Create Action Documents (existing logic)
+    // 4. Parse Actions and Create Action Documents
     const parsedActions = parseAction(aiResponse);
     const createdActions = [];
 
@@ -231,9 +194,7 @@ const analyzeMeeting = async (req, res, next) => {
 
     console.log(
       "AI Analysis Complete. Actions Created:",
-      createdActions.length,
-      "AI Actions:",
-      createdAIActions.length,
+      createdActions.length
     );
 
     res.status(200).json({
@@ -242,7 +203,6 @@ const analyzeMeeting = async (req, res, next) => {
         meeting,
         aiResponse,
         actions: createdActions,
-        aiActions: createdAIActions,
       },
     });
   } catch (err) {
