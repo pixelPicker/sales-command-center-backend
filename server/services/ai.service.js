@@ -54,14 +54,13 @@ Your task is to extract strictly verifiable, structured signals from a B2B sales
 
 NON-NEGOTIABLE RULES:
 
-1. Extract ONLY information explicitly supported by the transcript.
-2. Use the CURRENT DATE/TIME context to resolve relative dates (e.g., "tomorrow", "next Thursday"): ${currentDate}
-3. If something is not clearly stated, return null.
-3. Do NOT infer budget unless a number is stated.
-4. Do NOT assign stakeholder roles unless directly implied.
-5. If confidence < 0.6, return null.
-6. Separate evidence from interpretation.
-7. Return strictly valid JSON. No markdown. No commentary.
+1. **CRITICAL ANALYSIS**: You are a skeptical analyst, not a "pleaser." If the sentiment is mixed, lean towards "Neutral" or "Negative" if risks are significant.
+2. **VERIFIABLE DATA**: Extract ONLY information explicitly supported by the transcript. If not stated, return null.
+3. **RELATIVE DATES**: Use the CURRENT DATE/TIME context to resolve relative dates (e.g., "tomorrow", "next Thursday") into absolute ISO8601 strings: ${currentDate}.
+4. **INTENT SCORE PENALTY**: Penalize 'intentScore' HEAVILY (reduce by 0.3-0.5) if significant 'riskSignals' or 'objections' are detected (e.g., previous failed adoptions, technical blockers).
+5. **CONCISENESS**: Summary must be dense with facts, not vague marketing speak.
+6. **NO HALLUCINATIONS**: Do NOT infer budget, roles, or dates not clearly mentioned.
+7. **FORMAT**: Return strictly valid JSON. No markdown. No commentary.
 
 TRANSCRIPT:
 ---
@@ -129,6 +128,7 @@ RETURN JSON USING THIS EXACT SCHEMA:
       "type": "schedule | email | stage_update | followup",
       "title": "Short description",
       "dateTime": "ISO8601 or null",
+      "proposedStage": "For stage_update: Lead | Discovery | Qualified | Proposal Sent | Negotiation | Closed Won | Closed Lost",
       "evidence": "Quote supporting action",
       "confidence": 0.0
     }
@@ -137,7 +137,7 @@ RETURN JSON USING THIS EXACT SCHEMA:
   "dealSignal": "Positive | Neutral | Negative",
 
   "dealStageSuggestion": {
-    "stage": "String or null",
+    "stage": "Lead | Discovery | Qualified | Proposal Sent | Negotiation | Closed Won | Closed Lost | null",
     "reasoning": "One sentence grounded in transcript",
     "confidence": 0.0
   }
@@ -209,7 +209,14 @@ const askDealQuestion = async (context, question, userName = "Salesperson") => {
     }
 
     const prompt = `
-You are a Senior Strategic Sales Advisor. Your goal is to help ${userName} manage this deal with maximum efficiency and professionalism.
+You are a Senior Strategic Sales Advisor. Deliver crisp, data-dense insights for ${userName}.
+
+STRICT COMMUNICATION PROTOCOL:
+1. **NO FILLER**: Zero pleasantries (e.g., "Hello," "I hope," "I'd be happy to"). No apologies. No conversational transitions.
+2. **DATA-FIRST**: Lead with hard facts, numbers, and direct evidence from the context.
+3. **BREVITY**: Use bullet points and bolding. Keep sentences short and punchy.
+4. **MATTER**: Every line must contain actionable information or a verifiable fact.
+5. **GROUNDING**: If information is missing, state "Data missing for [X]" and move to the next point.
 
 CONTEXT DATA:
 ---
@@ -218,12 +225,6 @@ ${context}
 
 USER QUESTION:
 "${question}"
-
-STRICT GUIDELINES:
-1. **NO HALLUCINATIONS**: Your answer must be based strictly on the provided context. If the information (e.g., budget, specific names, or location details) is not in the context, state "Based on the available records, I don't see specific information regarding [X]." 
-2. **PERSONALIZATION**: Address the salesperson professionally (e.g., "Hello, ${userName}. Based on our records...") when appropriate.
-3. **TONE**: Be analytical, confident, and professional. Avoid sounding like a basic chatbot. Think high-level Sales Ops.
-4. **FORMATTING**: Use clean Markdown. Use bold for numbers and key terms. Use bulleted lists for clarity.
         `;
 
     const payload = {
@@ -231,7 +232,7 @@ STRICT GUIDELINES:
       messages: [
         {
           role: "system",
-          content: `You are a Senior Strategic Sales Advisor assisting ${userName}. You are expert, professional, and strictly grounded in data. Never invent details about deals or meetings.`
+          content: `You are an expert Strategic Sales Advisor. You are precise, professional, and strictly grounded in data. Avoid all conversational filler. Respond with direct, high-impact facts.`
         },
         { role: "user", content: prompt },
       ],

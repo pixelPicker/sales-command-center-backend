@@ -94,6 +94,43 @@ const deleteContact = async (req, res, next) => {
     }
 };
 
+// @desc    Update contact
+// @route   PUT /api/contact/:id
+// @access  Private
+const updateContact = async (req, res, next) => {
+    try {
+        let contact = await Contact.findById(req.params.id);
+
+        if (!contact) {
+            return res.status(404).json({
+                success: false,
+                error: 'Contact not found'
+            });
+        }
+
+        // Make sure user is contact owner
+        if (contact.owner.toString() !== req.user.id) {
+            return res.status(401).json({
+                success: false,
+                error: 'Not authorized to update this contact'
+            });
+        }
+
+        contact = await Contact.findByIdAndUpdate(
+            req.params.id,
+            req.body,
+            { new: true, runValidators: true }
+        );
+
+        res.status(200).json({
+            success: true,
+            data: contact
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 // @desc    Get single contact
 // @route   GET /api/contact/:id
 // @access  Private
@@ -128,6 +165,7 @@ const getContact = async (req, res, next) => {
 module.exports = {
     getContacts,
     createContact,
+    updateContact,
     deleteContact,
     getContact
 };

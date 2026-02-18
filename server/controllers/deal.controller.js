@@ -76,6 +76,7 @@ const getDeals = async (req, res, next) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const search = req.query.search || '';
+    const stage = req.query.stage || '';
     const skip = (page - 1) * limit;
 
     const query = { userId: req.user.id };
@@ -84,6 +85,10 @@ const getDeals = async (req, res, next) => {
       query.$or = [
         { title: { $regex: search, $options: 'i' } },
       ];
+    }
+
+    if (stage) {
+      query.stage = stage;
     }
 
     const deals = await Deal.find(query)

@@ -158,7 +158,7 @@ const analyzeMeeting = async (req, res, next) => {
     meeting.transcript = transcript;
 
     // 2. Call AI Service
-    const aiResponse = await analyzeTranscript(transcript, new Date().toISOString());
+    const aiResponse = await analyzeTranscript(transcript, new Date().toString());
 
     // 3. Update Meeting with Summary and Insights
     // Handle new schema: aiResponse.summary is now { text: string, confidence: number }

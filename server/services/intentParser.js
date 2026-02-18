@@ -1,3 +1,54 @@
+// Valid Deal stages from the Deal model enum
+const VALID_DEAL_STAGES = [
+    'Lead',
+    'Discovery',
+    'Qualified',
+    'Proposal Sent',
+    'Negotiation',
+    'Closed Won',
+    'Closed Lost'
+];
+
+// Helper function to map AI-generated stage names to valid enum values
+const mapToValidStage = (aiStage) => {
+    if (!aiStage || typeof aiStage !== 'string') return null;
+
+    const normalized = aiStage.toLowerCase().trim();
+
+    // Direct match (case-insensitive)
+    const directMatch = VALID_DEAL_STAGES.find(
+        stage => stage.toLowerCase() === normalized
+    );
+    if (directMatch) return directMatch;
+
+    // Fuzzy matching based on keywords
+    if (normalized.includes('lead') || normalized.includes('prospect')) {
+        return 'Lead';
+    }
+    if (normalized.includes('discovery') || normalized.includes('qualification') || normalized.includes('initial')) {
+        return 'Discovery';
+    }
+    if (normalized.includes('qualified') || normalized.includes('opportunity')) {
+        return 'Qualified';
+    }
+    if (normalized.includes('proposal') || normalized.includes('quote') || normalized.includes('draft')) {
+        return 'Proposal Sent';
+    }
+    if (normalized.includes('negotiat') || normalized.includes('contract') || normalized.includes('terms')) {
+        return 'Negotiation';
+    }
+    if (normalized.includes('won') || normalized.includes('closed won') || normalized.includes('success')) {
+        return 'Closed Won';
+    }
+    if (normalized.includes('lost') || normalized.includes('closed lost') || normalized.includes('rejected')) {
+        return 'Closed Lost';
+    }
+
+    // Default to null if no match found
+    console.warn(`Could not map AI stage "${aiStage}" to valid enum value. Skipping stage update.`);
+    return null;
+};
+
 // Helper function to parse scheduling intent from text (e.g., "Thursday at 4pm")
 const parseSchedulingIntent = (intent) => {
     if (!intent) return null;
@@ -79,15 +130,18 @@ const parseAction = (aiResponse) => {
                     status: 'pending'
                 });
             } else if (act.type === 'stage_update') {
-                actions.push({
-                    type: 'stage_update',
-                    suggestedData: {
-                        title: "Update Deal Stage",
-                        proposedStage: act.proposedStage || act.title,
-                        reason: act.evidence || "Positive signals detected."
-                    },
-                    status: 'pending'
-                });
+                const validStage = mapToValidStage(act.proposedStage || act.title);
+                if (validStage) {
+                    actions.push({
+                        type: 'stage_update',
+                        suggestedData: {
+                            title: "Update Deal Stage",
+                            proposedStage: validStage,
+                            reason: act.evidence || "Positive signals detected."
+                        },
+                        status: 'pending'
+                    });
+                }
             }
         }
     }
@@ -141,15 +195,18 @@ const parseAction = (aiResponse) => {
     // 3. Stage Update Suggestion
     const stageSuggestion = aiResponse.dealStageSuggestion?.stage || aiResponse.dealStageSuggestion;
     if (stageSuggestion && typeof stageSuggestion === 'string' && stageSuggestion !== 'None') {
-        actions.push({
-            type: 'stage_update',
-            suggestedData: {
-                title: "Update Deal Stage",
-                proposedStage: stageSuggestion,
-                reason: aiResponse.summary?.text || aiResponse.summary || "AI suggested stage update."
-            },
-            status: 'pending'
-        });
+        const validStage = mapToValidStage(stageSuggestion);
+        if (validStage) {
+            actions.push({
+                type: 'stage_update',
+                suggestedData: {
+                    title: "Update Deal Stage",
+                    proposedStage: validStage,
+                    reason: aiResponse.summary?.text || aiResponse.summary || "AI suggested stage update."
+                },
+                status: 'pending'
+            });
+        }
     }
 
     return actions;
