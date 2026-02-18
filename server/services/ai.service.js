@@ -225,6 +225,8 @@ ${context}
 
 USER QUESTION:
 "${question}"
+
+INSTRUCTION: You must answer the question using ONLY the provided context data. If the question is not related to the sales context or cannot be answered from the data provided (e.g., general knowledge questions like "who is president", "write python code", etc.), you MUST respond with exactly: "Not related to context".
         `;
 
     const payload = {
@@ -232,7 +234,7 @@ USER QUESTION:
       messages: [
         {
           role: "system",
-          content: `You are an expert Strategic Sales Advisor. You are precise, professional, and strictly grounded in data. Avoid all conversational filler. Respond with direct, high-impact facts.`
+          content: `You are an expert Strategic Sales Advisor. You are precise, professional, and strictly grounded in data. Avoid all conversational filler. Respond with direct, high-impact facts. IMPORTANT: If the user question is not related to the sales context, respond ONLY with "Not related to context".`
         },
         { role: "user", content: prompt },
       ],
