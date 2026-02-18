@@ -267,4 +267,80 @@ USER QUESTION:
   }
 };
 
-module.exports = { analyzeTranscript, askDealQuestion };
+const generateCoachInsight = async (aiInsights, dealStage) => {
+  try {
+    const apiKey = process.env.AI_API_KEY;
+    const apiUrl = process.env.AI_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
+
+    if (!apiKey) {
+      throw new Error("AI service not configured: Missing AI_API_KEY");
+    }
+
+    const insightsSummary = JSON.stringify({
+      summary: aiInsights?.summary,
+      dealSignal: aiInsights?.dealSignal,
+      objections: aiInsights?.objections,
+      riskSignals: aiInsights?.riskSignals,
+      intentScore: aiInsights?.intentScore,
+      actions: aiInsights?.actions,
+      dealStageSuggestion: aiInsights?.dealStageSuggestion,
+    }, null, 2);
+
+    const prompt = `
+You are an elite B2B Sales Performance Coach. Based on the AI analysis of a recent sales meeting, generate concise, actionable coaching feedback.
+
+CURRENT DEAL STAGE: ${dealStage}
+
+MEETING AI ANALYSIS:
+${insightsSummary}
+
+Generate coaching feedback in this EXACT JSON format:
+{
+  "positives": ["One specific thing done well, grounded in the data"],
+  "improvements": ["One specific thing to focus on next call"],
+  "risks": ["One specific risk to address, or null if none"]
+}
+
+RULES:
+- Maximum 1-2 items per array
+- Each item must be a single, punchy sentence (max 15 words)
+- Ground everything in the meeting data — no generic advice
+- If a field has no relevant data, return an empty array []
+- Return ONLY valid JSON, no markdown
+`;
+
+    const payload = {
+      model: "llama-3.1-8b-instant",
+      messages: [
+        {
+          role: "system",
+          content: "You are a concise, data-driven sales performance coach. Output strictly valid JSON only.",
+        },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.3,
+      response_format: { type: "json_object" },
+    };
+
+    const response = await axios.post(apiUrl, payload, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+    });
+
+    const content = response.data.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Unexpected API response structure");
+
+    return JSON.parse(content.trim());
+  } catch (error) {
+    console.error("AI Coach Error:", error.response?.data || error.message);
+    return {
+      positives: [],
+      improvements: ["Review meeting notes and prepare a clear agenda for next call."],
+      risks: [],
+    };
+  }
+};
+
+module.exports = { analyzeTranscript, askDealQuestion, generateCoachInsight };
