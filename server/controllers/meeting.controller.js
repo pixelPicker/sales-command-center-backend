@@ -424,11 +424,37 @@ const updateMeeting = async (req, res, next) => {
   }
 };
 
+// @desc    Delete meeting
+// @route   DELETE /api/meeting/:id
+// @access  Private
+const deleteMeeting = async (req, res, next) => {
+  try {
+    const meeting = await Meeting.findOne({ _id: req.params.id, userId: req.user.id });
+
+    if (!meeting) {
+      return res.status(404).json({
+        success: false,
+        message: 'Meeting not found'
+      });
+    }
+
+    await meeting.deleteOne();
+
+    res.status(200).json({
+      success: true,
+      data: {}
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   createMeeting,
   getCalendar,
   getMeeting,
   updateMeeting,
+  deleteMeeting,
   analyzeMeeting,
   transcribeMeetingAudio,
   autoProcessMeeting,

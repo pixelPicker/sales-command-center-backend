@@ -12,6 +12,7 @@ const {
   processLiveAudio,
   getMeetingsByClientId,
   transcribeChunk,
+  deleteMeeting,
 } = require("../controllers/meeting.controller");
 const multer = require('multer');
 const { protect } = require("../middleware/auth.middleware");
@@ -34,6 +35,7 @@ router.post('/transcribe-chunk', protect, uploadMemory.single('audio'), transcri
 router
   .route("/:id")
   .get(protect, getMeeting)
-  .put(protect, updateMeeting);
+  .put(protect, updateMeeting)
+  .delete(protect, deleteMeeting);
 
 module.exports = router;
