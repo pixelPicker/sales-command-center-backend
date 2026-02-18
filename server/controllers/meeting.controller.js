@@ -2,6 +2,8 @@ const Meeting = require('../models/Meeting');
 const Action = require('../models/Action');
 const { analyzeTranscript } = require('../services/ai.service');
 const { parseAction, parseSchedulingIntent } = require('../services/intentParser');
+const axios = require('axios');
+const FormData = require('form-data');
 
 
 // @desc    Create a meeting (manual)
@@ -339,7 +341,62 @@ const processLiveAudio = async (req, res, next) => {
   }
 };
 
-// @desc    Update meeting
+// @desc    Transcribe a single audio chunk via Groq Whisper
+// @route   POST /api/meeting/transcribe-chunk
+// @access  Private
+const transcribeChunk = async (req, res, next) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ success: false, message: 'No audio data received' });
+    }
+
+    const apiKey = process.env.AI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ success: false, message: 'AI_API_KEY not configured' });
+    }
+
+    const form = new FormData();
+    form.append('file', req.file.buffer, {
+      filename: 'chunk.webm',
+      contentType: 'audio/webm',
+    });
+    form.append('model', 'whisper-large-v3-turbo');
+    form.append('response_format', 'json');
+    form.append('language', 'en');
+
+    const response = await axios.post(
+      'https://api.groq.com/openai/v1/audio/transcriptions',
+      form,
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          ...form.getHeaders(),
+        },
+        timeout: 30000,
+      }
+    );
+
+    let text = response.data?.text?.trim() || '';
+
+    // Filter common Whisper hallucinations on silence/low audio
+    const hallucinations = [
+      'Thank you.', 'Thank you very much.', 'Thanks.', 'Bye.',
+      'Subtitles by', 'Amara.org', 'MBC', 'Copyright', 'All rights reserved'
+    ];
+
+    // If text is short (< 50 chars) and contains hallucination phrases, discard it
+    if (text.length < 50 && hallucinations.some(h => text.toLowerCase().includes(h.toLowerCase()))) {
+      console.log('Filtered Whisper hallucination:', text);
+      text = '';
+    }
+
+    res.status(200).json({ success: true, text });
+  } catch (err) {
+    console.error('Whisper transcription error:', err?.response?.data || err.message);
+    next(err);
+  }
+};
+
 // @route   PUT /api/meeting/:id
 // @access  Private
 const updateMeeting = async (req, res, next) => {
@@ -377,4 +434,5 @@ module.exports = {
   autoProcessMeeting,
   processLiveAudio,
   getMeetingsByClientId,
+  transcribeChunk,
 };

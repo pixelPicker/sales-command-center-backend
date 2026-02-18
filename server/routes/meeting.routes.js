@@ -11,6 +11,7 @@ const {
   autoProcessMeeting,
   processLiveAudio,
   getMeetingsByClientId,
+  transcribeChunk,
 } = require("../controllers/meeting.controller");
 const multer = require('multer');
 const { protect } = require("../middleware/auth.middleware");
@@ -29,6 +30,7 @@ router.post('/analyze', protect, analyzeMeeting);
 router.post('/transcribe', protect, upload.single('audio'), transcribeMeetingAudio);
 router.post('/auto-process', protect, upload.single('audio'), autoProcessMeeting);
 router.post('/live-audio', protect, uploadMemory.single('audio'), processLiveAudio);
+router.post('/transcribe-chunk', protect, uploadMemory.single('audio'), transcribeChunk);
 router
   .route("/:id")
   .get(protect, getMeeting)
