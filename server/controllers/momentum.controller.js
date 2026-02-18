@@ -41,33 +41,30 @@ const getMomentum = async (req, res, next) => {
         const userId = req.user.id;
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-        // Count completed meetings in last 7 days (past meetings)
+        // --- Weekly Stats (Momentum) ---
         const meetingsCompleted = await Meeting.countDocuments({
             userId,
             dateTime: { $gte: sevenDaysAgo, $lt: new Date() },
         });
 
-        // Count approved actions in last 7 days
         const actionsApproved = await Action.countDocuments({
             userId,
             status: 'approved',
             updatedAt: { $gte: sevenDaysAgo },
         });
 
-        // Count deals that had their stage updated in last 7 days
         const dealsProgressed = await Deal.countDocuments({
             userId,
             updatedAt: { $gte: sevenDaysAgo },
             stage: { $ne: 'Lead' },
         });
 
-        // Calculate score
         const score =
             meetingsCompleted * 2 +
             actionsApproved * 3 +
             dealsProgressed * 5;
 
-        // Determine level
+        // Determine Weekly Status (Momentum Level)
         let level, emoji;
         if (score >= 15) {
             level = 'Rising';
@@ -83,8 +80,57 @@ const getMomentum = async (req, res, next) => {
             emoji = '—';
         }
 
-        // Dot bar: 5 dots, fill based on score capped at 25
         const filledDots = Math.min(5, Math.round((score / 25) * 5));
+
+        // --- Career Stats (All-Time) ---
+        const totalMeetings = await Meeting.countDocuments({
+            userId,
+            dateTime: { $lt: new Date() },
+        });
+
+        const totalActions = await Action.countDocuments({
+            userId,
+            status: 'approved',
+        });
+
+        const totalDealsWon = await Deal.countDocuments({
+            userId,
+            stage: 'Closed Won',
+        });
+
+        // XP Calculation
+        // 10 XP per meeting, 5 XP per action, 50 XP per deal won
+        const xp = (totalMeetings * 10) + (totalActions * 5) + (totalDealsWon * 50);
+
+        // Level Calculation (Simple linear or quadratic curve)
+        // Level = floor(sqrt(XP / 100)) + 1
+        // Example: 0 XP = Lvl 1, 100 XP = Lvl 2, 400 XP = Lvl 3, 900 XP = Lvl 4
+        const careerLevel = Math.floor(Math.sqrt(Math.max(0, xp) / 100)) + 1;
+
+        // XP to next level
+        const currentLevelBaseXp = Math.pow(careerLevel - 1, 2) * 100;
+        const nextLevelBaseXp = Math.pow(careerLevel, 2) * 100;
+        const xpProgress = xp - currentLevelBaseXp;
+        const xpRequired = nextLevelBaseXp - currentLevelBaseXp;
+
+
+        // --- Achievements ---
+        const achievements = [];
+
+        if (totalMeetings >= 1) achievements.push({ id: 'first_meeting', icon: '🎙️', name: 'First Strike', description: 'Complete your first meeting', unlockedAt: new Date() });
+        if (totalMeetings >= 10) achievements.push({ id: 'talkator', icon: '🗣️', name: 'Talkator', description: 'Complete 10 meetings', unlockedAt: new Date() });
+        if (totalMeetings >= 50) achievements.push({ id: 'marathon', icon: '🏃', name: 'Marathoner', description: 'Complete 50 meetings', unlockedAt: new Date() });
+
+        if (totalActions >= 1) achievements.push({ id: 'doer', icon: '✅', name: 'The Doer', description: 'Complete your first action', unlockedAt: new Date() });
+        if (totalActions >= 20) achievements.push({ id: 'machine', icon: '🤖', name: 'Machine', description: 'Complete 20 actions', unlockedAt: new Date() });
+
+        if (totalDealsWon >= 1) achievements.push({ id: 'closer', icon: '💰', name: 'The Closer', description: 'Won your first deal', unlockedAt: new Date() });
+        if (totalDealsWon >= 5) achievements.push({ id: 'rainmaker', icon: '🌧️', name: 'Rainmaker', description: 'Won 5 deals', unlockedAt: new Date() });
+
+        // Add "Locked" placeholders for next milestones if not unlocked
+        if (totalMeetings < 10 && totalMeetings >= 1) achievements.push({ id: 'talkator_locked', icon: '🔒', name: 'Talkator', description: 'Complete 10 meetings', locked: true });
+        if (totalDealsWon < 1) achievements.push({ id: 'closer_locked', icon: '🔒', name: 'The Closer', description: 'Win your first deal', locked: true });
+
 
         res.status(200).json({
             success: true,
@@ -98,6 +144,16 @@ const getMomentum = async (req, res, next) => {
                     actionsApproved,
                     dealsProgressed,
                 },
+                career: {
+                    xp,
+                    level: careerLevel,
+                    nextLevelXp: xpRequired,
+                    currentLevelProgress: xpProgress,
+                    totalMeetings,
+                    totalActions,
+                    totalDealsWon
+                },
+                achievements
             },
         });
     } catch (err) {
